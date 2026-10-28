@@ -20,6 +20,7 @@ It is designed for server-side applications that already have a file in memory a
 - Per-run tracing through `result.meta.trace`
 - Dual package output for CommonJS and ESM
 - Zero runtime npm dependencies
+- Closed-set provider type, extensible via TypeScript module augmentation
 
 ## Installation
 
@@ -117,7 +118,7 @@ type PipelineResult = {
   originalName: string;
   storedName: string;
   mimeType: string;
-  provider: "local";
+  provider: PipelineProvider;
 };
 ```
 
@@ -245,6 +246,69 @@ const renameProcessor: Processor = async (ctx) => {
 };
 ```
 
+## Custom Storage Adapters
+
+The library ships only `localStorage()`. Any other backend — S3, Cloudflare R2, Vercel Blob, a database, an in-memory store for tests — is a **consumer-side** adapter. The library provides the `Storage` contract; it does not own the provider.
+
+A custom adapter implements `Storage` and returns a `PipelineResult` from `save()`:
+
+```ts
+import type { PipelineFile, PipelineResult, Storage } from "media-pipeline";
+
+export const memoryStorage = (): Storage => ({
+  async save(file: PipelineFile): Promise<PipelineResult> {
+    return {
+      url: `memory://${file.filename}`,
+      path: file.filename,
+      size: file.size,
+      metadata: {},
+      meta: { plugins: [], trace: [] }, // executor replaces `meta` with the run trace
+      originalName: file.filename,
+      storedName: file.filename,
+      mimeType: file.mimeType,
+      provider: "memory", // ← see "Registering a provider name" below
+    };
+  },
+});
+```
+It plugs directly into `createPipeline()`:
+
+```ts
+const pipeline = createPipeline({
+  storage: memoryStorage(),
+  validators: [maxSize(5 * 1024 * 1024)],
+});
+```
+### Registering a provider name
+`PipelineProvider` is a closed set. By default it is exactly `"local"`. A consumer that writes an adapter for a new backend registers that backend's provider name via TypeScript module augmentation:
+
+```ts
+// e.g. `src/env.d.ts` in the consuming project
+import "media-pipeline";
+
+declare module "media-pipeline" {
+  interface PipelineProviders {
+    memory: "memory";
+    r2: "r2";
+    s3: "s3";
+  }
+}
+```
+After augmentation, in that consumer's compilation unit:
+
+- `provider: "memory"` and `provider: "r2"` are valid because the consumer declared them.
+
+- `provider: "gcs"` is still rejected at compile time — typos remain caught.
+
+Consumers that never augment see exactly `"local"`, identical to v1.6.x — no change required.
+
+### Why a closed set instead of `string`
+- `provider` is used by consumers for routing and metrics. A typo (`"r22"`, `"S3"`, `"aws_s3"`) that silently compiled would be a data-integrity bug rather than a type error.
+
+- The augmentation block makes "which providers does this app support" a one-line, greppable, compile-time fact — not a scattering of implicit strings.
+
+- It keeps the library storage-agnostic: the library defines the shape of provider identity, but never names a provider itself beyond `"local"`.
+
 ## Errors
 
 The package exports these error classes:
@@ -273,9 +337,8 @@ try {
 
 - Files are processed in memory as `Buffer` objects
 - Validators and processors run sequentially
-- Only local filesystem storage is built in
-- `PipelineResult.provider` is currently typed as `"local"`
-- The repository currently exposes only a `build` npm script
+- Only `localStorage()` ships as a built-in adapter; other backends are consumer-owned
+- The repository currently exposes `build`, `test`, `test:watch`, and `typecheck` npm scripts; the `tests/` folder also contains pre-existing exploratory scripts not yet wired into the formal suite
 
 ## Development
 

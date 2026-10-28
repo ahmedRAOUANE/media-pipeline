@@ -1,3 +1,10 @@
+> **Archived as of v1.7.0.** This folder is retained for historical reference.
+> Current documentation is the README and the source JSDoc.
+> Some content here is stale — most notably, `PipelineResult.provider` is no
+> longer the literal `"local"` and is extensible via module augmentation.
+> See the README's "Custom Storage Adapters" section for the current model.
+
+
 # Media Pipeline - Project Overview
 
 **Version:** 1.6.1  

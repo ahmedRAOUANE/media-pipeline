@@ -14,6 +14,9 @@ export type {
     Validator,
     Storage,
     PipelineContext,
+    PipelineProvider,
+    PipelineConfig,
+    PipelineProviders,
 } from "./types/pipeline";
 
 export type {

@@ -1,0 +1,11 @@
+{
+    "extends": "./tsconfig.json",
+    "include": [
+        "tests/provider-bare.test-d.ts"
+    ],
+    "exclude": [
+        "node_modules",
+        "dist",
+        "tests/provider-augmentation.test.ts"
+    ]
+}
